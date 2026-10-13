@@ -1,8 +1,6 @@
 package com.nova.tech.bank.sphere.controller;
 
-import com.nova.tech.bank.sphere.dto.MessageResponse;
-import com.nova.tech.bank.sphere.dto.RegisterRequest;
-import com.nova.tech.bank.sphere.dto.ResendRequest;
+import com.nova.tech.bank.sphere.dto.*;
 import com.nova.tech.bank.sphere.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,5 +33,10 @@ public class AuthController {
         authService.resendVerification(req.getEmail());
         return ResponseEntity.ok(new MessageResponse(
                 "If the account exists and is not verified, a new link has been sent."));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.login(req));
     }
 }

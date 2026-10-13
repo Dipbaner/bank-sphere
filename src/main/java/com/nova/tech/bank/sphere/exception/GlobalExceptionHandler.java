@@ -44,4 +44,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleInvalidToken(InvalidTokenException ex) {
         return build(HttpStatus.BAD_REQUEST, "INVALID_TOKEN", ex.getMessage(), null);
     }
+
+    @ExceptionHandler(AuthenticationFailedException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthFailed(AuthenticationFailedException ex) {
+        return build(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(AccountStateException.class)
+    public ResponseEntity<Map<String, Object>> handleAccountState(AccountStateException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getCode(), ex.getMessage(), null);
+    }
 }

@@ -1,9 +1,15 @@
 package com.nova.tech.bank.sphere.service;
 
+import com.nova.tech.bank.sphere.dto.LoginRequest;
+import com.nova.tech.bank.sphere.dto.LoginResponse;
 import com.nova.tech.bank.sphere.dto.RegisterRequest;
 import com.nova.tech.bank.sphere.entity.*;
+import com.nova.tech.bank.sphere.exception.AccountStateException;
+import com.nova.tech.bank.sphere.exception.AuthenticationFailedException;
 import com.nova.tech.bank.sphere.exception.DuplicateResourceException;
 import com.nova.tech.bank.sphere.repository.UserRepository;
+import com.nova.tech.bank.sphere.security.JwtService;
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
@@ -23,6 +29,14 @@ public class AuthService {
 
     @org.springframework.beans.factory.annotation.Value("${app.verification.expiry-hours:24}")
     private long verificationExpiryHours;
+
+    private final JwtService jwtService;
+    private String dummyHash;   // not final, so Lombok leaves it out of the constructor
+
+    @PostConstruct
+    void initDummyHash() {
+        this.dummyHash = passwordEncoder.encode("not-a-real-password");
+    }
 
     @Transactional
     public void register(RegisterRequest req) {
@@ -72,6 +86,39 @@ public class AuthService {
                             u, TokenType.EMAIL_VERIFY, Duration.ofHours(verificationExpiryHours));
                     mailService.sendVerificationEmail(u.getEmail(), u.getName(), raw);
                 });
+    }
+
+    public LoginResponse login(LoginRequest req) {
+        String email = req.getEmail().trim().toLowerCase();
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        // Always run one BCrypt check, even for unknown emails, so response time
+        // does not reveal whether the account exists.
+        String hashToCheck = (user != null && user.getPasswordHash() != null)
+                ? user.getPasswordHash() : dummyHash;
+        boolean passwordOk = passwordEncoder.matches(req.getPassword(), hashToCheck);
+
+        if (user == null || !passwordOk) {
+            throw new AuthenticationFailedException("Invalid email or password");
+        }
+
+        // Status is checked only AFTER the password is correct,
+        // so these messages cannot be used to discover accounts.
+        switch (user.getStatus()) {
+            case PENDING_EMAIL_VERIFICATION ->
+                    throw new AccountStateException("EMAIL_NOT_VERIFIED", "Please verify your email first");
+            case LOCKED ->
+                    throw new AccountStateException("ACCOUNT_LOCKED", "Account is locked. Try again later");
+            case DISABLED ->
+                    throw new AccountStateException("ACCOUNT_DISABLED", "Account is disabled. Contact the bank");
+            default -> { }
+        }
+
+        // TODO Step 6: enrollmentRequired = !otpEnabled(user). Until OTP exists we report true.
+        return new LoginResponse("OTP_REQUIRED",
+                jwtService.generatePreAuthToken(user),
+                jwtService.preAuthSeconds(),
+                true);
     }
 
 }
