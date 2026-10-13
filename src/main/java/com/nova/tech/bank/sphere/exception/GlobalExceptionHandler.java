@@ -39,4 +39,9 @@ public class GlobalExceptionHandler {
         if (details != null) body.put("details", details);
         return ResponseEntity.status(s).body(body);
     }
+
+    @ExceptionHandler(InvalidTokenException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidToken(InvalidTokenException ex) {
+        return build(HttpStatus.BAD_REQUEST, "INVALID_TOKEN", ex.getMessage(), null);
+    }
 }
