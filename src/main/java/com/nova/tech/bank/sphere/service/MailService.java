@@ -47,4 +47,15 @@ public class MailService {
             log.error("Could not send email to {}: {}", to, e.getMessage());
         }
     }
+
+    @Async
+    public void sendLockoutEmail(String to, String name, long minutes) {
+        String body = "Hello " + name + ",\n\n"
+                + "Your BankSphere account was temporarily locked for " + minutes
+                + " minutes after several failed login attempts.\n\n"
+                + "If this was you, wait and try again. If it was not you, please reset your "
+                + "password as soon as the lock ends and contact the bank.\n\n"
+                + "BankSphere Security Team";
+        send(to, "Your BankSphere account was locked", body);
+    }
 }

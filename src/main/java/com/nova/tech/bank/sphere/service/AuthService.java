@@ -12,7 +12,7 @@ import com.nova.tech.bank.sphere.security.JwtService;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import lombok.Value;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -27,11 +27,18 @@ public class AuthService {
     private final VerificationTokenService tokenService;
     private final MailService mailService;
 
+    private final LockoutService lockoutService;
+    private final AuditService auditService;
+
     @org.springframework.beans.factory.annotation.Value("${app.verification.expiry-hours:24}")
     private long verificationExpiryHours;
 
     private final JwtService jwtService;
-    private String dummyHash;   // not final, so Lombok leaves it out of the constructor
+    private String dummyHash;
+    // not final, so Lombok leaves it out of the constructor
+
+    @Value("${app.security.lock-minutes}")
+    private long lockMinutes;
 
     @PostConstruct
     void initDummyHash() {
@@ -92,33 +99,80 @@ public class AuthService {
         String email = req.getEmail().trim().toLowerCase();
         User user = userRepository.findByEmail(email).orElse(null);
 
-        // Always run one BCrypt check, even for unknown emails, so response time
-        // does not reveal whether the account exists.
+        // Always run one BCrypt check, even for unknown emails (same response time).
         String hashToCheck = (user != null && user.getPasswordHash() != null)
                 ? user.getPasswordHash() : dummyHash;
         boolean passwordOk = passwordEncoder.matches(req.getPassword(), hashToCheck);
 
+        // 1) Wrong password or unknown account: generic 401, count the failure.
         if (user == null || !passwordOk) {
+            if (user == null) {
+                auditService.log(null, email, AuditAction.LOGIN_FAILED, AuditStatus.FAILURE,
+                        "unknown account");
+            } else {
+                handleFailedPassword(user, email);
+            }
             throw new AuthenticationFailedException("Invalid email or password");
         }
 
-        // Status is checked only AFTER the password is correct,
-        // so these messages cannot be used to discover accounts.
+        // 2) Correct password, but the account is temporarily locked.
+        if (lockoutService.isLocked(user)) {
+            auditService.log(user.getId(), email, AuditAction.LOGIN_BLOCKED, AuditStatus.FAILURE,
+                    "temporarily locked");
+            throw new AccountStateException("ACCOUNT_LOCKED",
+                    "Account is locked. Try again in " + lockoutService.minutesRemaining(user) + " minute(s)");
+        }
+
+        // 3) Correct password, but the account state does not allow login.
         switch (user.getStatus()) {
-            case PENDING_EMAIL_VERIFICATION ->
-                    throw new AccountStateException("EMAIL_NOT_VERIFIED", "Please verify your email first");
-            case LOCKED ->
-                    throw new AccountStateException("ACCOUNT_LOCKED", "Account is locked. Try again later");
-            case DISABLED ->
-                    throw new AccountStateException("ACCOUNT_DISABLED", "Account is disabled. Contact the bank");
+            case PENDING_EMAIL_VERIFICATION -> {
+                auditService.log(user.getId(), email, AuditAction.LOGIN_BLOCKED, AuditStatus.FAILURE,
+                        "email not verified");
+                throw new AccountStateException("EMAIL_NOT_VERIFIED", "Please verify your email first");
+            }
+            case LOCKED -> {
+                auditService.log(user.getId(), email, AuditAction.LOGIN_BLOCKED, AuditStatus.FAILURE,
+                        "locked by staff");
+                throw new AccountStateException("ACCOUNT_LOCKED", "Account is locked. Please contact the bank");
+            }
+            case DISABLED -> {
+                auditService.log(user.getId(), email, AuditAction.LOGIN_BLOCKED, AuditStatus.FAILURE,
+                        "account disabled");
+                throw new AccountStateException("ACCOUNT_DISABLED", "Account is disabled. Contact the bank");
+            }
             default -> { }
         }
 
-        // TODO Step 6: enrollmentRequired = !otpEnabled(user). Until OTP exists we report true.
+        // 4) Success of step 1.
+        lockoutService.resetFailures(user.getId());
+        auditService.log(user.getId(), email, AuditAction.LOGIN_PASSWORD_OK, AuditStatus.SUCCESS,
+                "pre-auth token issued");
+
+        // TODO Step 6: enrollmentRequired = !otpEnabled(user)
         return new LoginResponse("OTP_REQUIRED",
                 jwtService.generatePreAuthToken(user),
                 jwtService.preAuthSeconds(),
                 true);
+    }
+
+    private void handleFailedPassword(User user, String email) {
+        // While locked, further wrong guesses are logged but do not extend the lock.
+        if (lockoutService.isLocked(user)) {
+            auditService.log(user.getId(), email, AuditAction.LOGIN_FAILED, AuditStatus.FAILURE,
+                    "wrong password while locked");
+            return;
+        }
+
+        boolean justLocked = lockoutService.recordFailedLogin(user.getId());
+        auditService.log(user.getId(), email, AuditAction.LOGIN_FAILED, AuditStatus.FAILURE,
+                "wrong password");
+
+        if (justLocked) {
+            auditService.log(user.getId(), email, AuditAction.ACCOUNT_LOCKED, AuditStatus.FAILURE,
+                    "too many failed attempts");
+            // 'user' was loaded before the lock; the duration comes from configuration.
+            mailService.sendLockoutEmail(user.getEmail(), user.getName(), lockMinutes);
+        }
     }
 
 }
