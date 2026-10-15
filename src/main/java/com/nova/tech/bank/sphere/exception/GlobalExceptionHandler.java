@@ -54,4 +54,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleAccountState(AccountStateException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getCode(), ex.getMessage(), null);
     }
+
+    @ExceptionHandler(InvalidOtpException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidOtp(InvalidOtpException ex) {
+        return build(HttpStatus.UNAUTHORIZED, "INVALID_OTP", ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(OtpException.class)
+    public ResponseEntity<Map<String, Object>> handleOtp(OtpException ex) {
+        return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), null);
+    }
 }

@@ -66,4 +66,12 @@ public class LockoutService {
             userRepository.save(u);
         }
     }
+
+    /** Locks the account right now (used when OTP guessing is detected). */
+    @Transactional
+    public void lockNow(Long userId) {
+        User u = userRepository.findByIdForUpdate(userId).orElseThrow();
+        u.setLockedUntil(LocalDateTime.now().plusMinutes(lockMinutes));
+        userRepository.save(u);
+    }
 }

@@ -26,7 +26,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final VerificationTokenService tokenService;
     private final MailService mailService;
-
+    private final OtpService otpService;
     private final LockoutService lockoutService;
     private final AuditService auditService;
 
@@ -148,11 +148,10 @@ public class AuthService {
         auditService.log(user.getId(), email, AuditAction.LOGIN_PASSWORD_OK, AuditStatus.SUCCESS,
                 "pre-auth token issued");
 
-        // TODO Step 6: enrollmentRequired = !otpEnabled(user)
         return new LoginResponse("OTP_REQUIRED",
                 jwtService.generatePreAuthToken(user),
                 jwtService.preAuthSeconds(),
-                true);
+                !otpService.isEnabled(user.getId()));   // true => the app must show the enrollment screen
     }
 
     private void handleFailedPassword(User user, String email) {
