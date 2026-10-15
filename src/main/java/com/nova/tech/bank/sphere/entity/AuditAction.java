@@ -10,5 +10,8 @@ public enum AuditAction {
     OTP_ENROLLED,
     OTP_FAILED,
     LOGIN_SUCCESS,        // access token issued after the second factor
-    BACKUP_CODE_USED
+    BACKUP_CODE_USED,
+
+    LOGOUT,
+    TOKEN_REUSE_DETECTED
 }

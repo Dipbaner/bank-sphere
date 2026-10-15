@@ -24,20 +24,26 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final AccessTokenBlacklist blacklist;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain chain) throws ServletException, IOException, IOException {
+                                    FilterChain chain) throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
 
         if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
             try {
-                Claims claims = jwtService.parse(token);
-                String stage = claims.get("stage", String.class);
+                Claims claims = jwtService.parse(header.substring(7));
 
+                if (blacklist.isRevoked(claims.getId())) {
+                    SecurityContextHolder.clearContext();      // logged out: stay anonymous (401)
+                    chain.doFilter(request, response);
+                    return;
+                }
+
+                String stage = claims.get("stage", String.class);
                 List<GrantedAuthority> authorities = new ArrayList<>();
                 authorities.add(new SimpleGrantedAuthority("STAGE_" + stage));
                 if (JwtService.STAGE_ACCESS.equals(stage)) {
@@ -46,13 +52,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                 AuthenticatedUser principal = new AuthenticatedUser(
                         Long.parseLong(claims.getSubject()),
-                        claims.get("email", String.class));
+                        claims.get("email", String.class),
+                        claims.getId(),
+                        claims.getExpiration().toInstant());
 
                 SecurityContextHolder.getContext().setAuthentication(
                         new UsernamePasswordAuthenticationToken(principal, null, authorities));
 
-            } catch (JwtException | IllegalArgumentException e) {
-                SecurityContextHolder.clearContext();   // invalid token: stay anonymous, result is 401
+            }
+            catch (JwtException | IllegalArgumentException e) {
+                SecurityContextHolder.clearContext();
             }
         }
         chain.doFilter(request, response);

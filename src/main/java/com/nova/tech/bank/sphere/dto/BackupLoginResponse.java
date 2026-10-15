@@ -2,6 +2,7 @@ package com.nova.tech.bank.sphere.dto;
 
 public record BackupLoginResponse(
         String accessToken,
+        String refreshToken,
         String role,
         long expiresInSeconds,
         int remainingBackupCodes

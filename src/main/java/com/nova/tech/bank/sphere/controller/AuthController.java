@@ -1,11 +1,13 @@
 package com.nova.tech.bank.sphere.controller;
 
 import com.nova.tech.bank.sphere.dto.*;
+import com.nova.tech.bank.sphere.security.AuthenticatedUser;
 import com.nova.tech.bank.sphere.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -38,5 +40,23 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
         return ResponseEntity.ok(authService.login(req));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthTokensResponse> refresh(@Valid @RequestBody RefreshRequest req) {
+        return ResponseEntity.ok(authService.refresh(req.getRefreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<MessageResponse> logout(@AuthenticationPrincipal AuthenticatedUser me,
+                                                  @Valid @RequestBody(required = false) LogoutRequest req) {
+        authService.logout(me, req == null ? null : req.getRefreshToken());
+        return ResponseEntity.ok(new MessageResponse("Logged out"));
+    }
+
+    @PostMapping("/logout-all")
+    public ResponseEntity<MessageResponse> logoutAll(@AuthenticationPrincipal AuthenticatedUser me) {
+        authService.logoutAll(me);
+        return ResponseEntity.ok(new MessageResponse("Logged out from all devices"));
     }
 }

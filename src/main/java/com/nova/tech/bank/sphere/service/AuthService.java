@@ -1,5 +1,6 @@
 package com.nova.tech.bank.sphere.service;
 
+import com.nova.tech.bank.sphere.dto.AuthTokensResponse;
 import com.nova.tech.bank.sphere.dto.LoginRequest;
 import com.nova.tech.bank.sphere.dto.LoginResponse;
 import com.nova.tech.bank.sphere.dto.RegisterRequest;
@@ -8,6 +9,8 @@ import com.nova.tech.bank.sphere.exception.AccountStateException;
 import com.nova.tech.bank.sphere.exception.AuthenticationFailedException;
 import com.nova.tech.bank.sphere.exception.DuplicateResourceException;
 import com.nova.tech.bank.sphere.repository.UserRepository;
+import com.nova.tech.bank.sphere.security.AccessTokenBlacklist;
+import com.nova.tech.bank.sphere.security.AuthenticatedUser;
 import com.nova.tech.bank.sphere.security.JwtService;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
@@ -29,6 +32,9 @@ public class AuthService {
     private final OtpService otpService;
     private final LockoutService lockoutService;
     private final AuditService auditService;
+
+    private final RefreshTokenService refreshTokenService;
+    private final AccessTokenBlacklist accessTokenBlacklist;
 
     @org.springframework.beans.factory.annotation.Value("${app.verification.expiry-hours:24}")
     private long verificationExpiryHours;
@@ -174,4 +180,20 @@ public class AuthService {
         }
     }
 
+    public AuthTokensResponse refresh(String rawRefreshToken) {
+        return refreshTokenService.rotate(rawRefreshToken);
+    }
+
+    public void logout(AuthenticatedUser me, String rawRefreshToken) {
+        refreshTokenService.logout(me.id(), rawRefreshToken);
+        accessTokenBlacklist.revoke(me.jti(), me.expiresAt());     // this access token dies now
+        auditService.log(me.id(), me.email(), AuditAction.LOGOUT, AuditStatus.SUCCESS, "single session");
+    }
+
+    public void logoutAll(AuthenticatedUser me) {
+        int revoked = refreshTokenService.logoutAll(me.id());
+        accessTokenBlacklist.revoke(me.jti(), me.expiresAt());
+        auditService.log(me.id(), me.email(), AuditAction.LOGOUT, AuditStatus.SUCCESS,
+                "all sessions, " + revoked + " refresh tokens revoked");
+    }
 }

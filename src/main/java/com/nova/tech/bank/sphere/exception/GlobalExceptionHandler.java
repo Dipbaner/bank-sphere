@@ -64,4 +64,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleOtp(OtpException ex) {
         return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), null);
     }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidRefresh(InvalidRefreshTokenException ex) {
+        return build(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage(), null);
+    }
 }

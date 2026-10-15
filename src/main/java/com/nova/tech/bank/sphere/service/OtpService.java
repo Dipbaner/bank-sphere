@@ -24,16 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalLong;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import java.security.SecureRandom;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.OptionalLong;
-
 @Service
 @RequiredArgsConstructor
 public class OtpService {
@@ -52,6 +42,7 @@ public class OtpService {
     private final JwtService jwtService;
     private final AuditService auditService;
     private final MailService mailService;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${app.totp.issuer}")
     private String issuer;
@@ -119,7 +110,10 @@ public class OtpService {
         auditService.log(userId, user.getEmail(), AuditAction.LOGIN_SUCCESS, AuditStatus.SUCCESS,
                 "enrollment completed login");
 
-        return new EnrollConfirmResponse(backupCodes, jwtService.generateAccessToken(user),
+        // confirmEnrollment
+        return new EnrollConfirmResponse(backupCodes,
+                jwtService.generateAccessToken(user),
+                refreshTokenService.startSession(user),
                 user.getRole().name(), jwtService.accessSeconds());
     }
 
@@ -138,7 +132,10 @@ public class OtpService {
 
         auditService.log(userId, user.getEmail(), AuditAction.LOGIN_SUCCESS, AuditStatus.SUCCESS,
                 "otp verified");
+
+        // verifyLogin
         return new AuthTokensResponse(jwtService.generateAccessToken(user),
+                refreshTokenService.startSession(user),
                 user.getRole().name(), jwtService.accessSeconds());
     }
 
@@ -162,7 +159,9 @@ public class OtpService {
         auditService.log(userId, user.getEmail(), AuditAction.LOGIN_SUCCESS, AuditStatus.SUCCESS,
                 "backup code login");
 
+// verifyBackupCode
         return new BackupLoginResponse(jwtService.generateAccessToken(user),
+                refreshTokenService.startSession(user),
                 user.getRole().name(), jwtService.accessSeconds(),
                 (int) backupRepo.countByUserIdAndUsedFalse(userId));
     }
