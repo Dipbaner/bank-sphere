@@ -49,4 +49,11 @@ public class VerificationTokenService {
         t.setUsed(true);
         return t.getUser();
     }
+
+    /** True if a token of this type was issued less than 'cooldown' ago and is still unused. */
+    public boolean issuedRecently(User user, TokenType type, Duration validity, Duration cooldown) {
+        return repository.findFirstByUserAndTypeAndUsedFalseOrderByIdDesc(user, type)
+                .map(t -> t.getExpiresAt().isAfter(LocalDateTime.now().plus(validity).minus(cooldown)))
+                .orElse(false);
+    }
 }

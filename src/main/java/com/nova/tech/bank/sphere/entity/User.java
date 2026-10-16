@@ -22,7 +22,7 @@ public class User {
     @Column(nullable = false, unique = true, length = 120)
     private String email;
 
-    @Column(nullable = false, unique = true, length = 15)
+    @Column(unique = true, length = 15)
     private String phone;
 
     @Column(name = "password_hash", length = 100)
@@ -51,6 +51,9 @@ public class User {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "google_subject", unique = true, length = 255)
+    private String googleSubject;
 
     @PrePersist
     void onCreate () {

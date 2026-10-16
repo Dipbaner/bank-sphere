@@ -1,5 +1,7 @@
 package com.nova.tech.bank.sphere.exception;
 
+import com.nova.tech.bank.sphere.security.RefreshCookie;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,7 +17,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+
+    private final RefreshCookie refreshCookie;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
@@ -65,8 +70,18 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), null);
     }
 
+    @ExceptionHandler(PasswordException.class)
+    public ResponseEntity<Map<String, Object>> handlePassword(PasswordException ex) {
+        return build(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), null);
+    }
+
     @ExceptionHandler(InvalidRefreshTokenException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidRefresh(InvalidRefreshTokenException ex) {
-        return build(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", ex.getMessage(), null);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", 401);
+        body.put("code", "INVALID_REFRESH_TOKEN");
+        body.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).headers(refreshCookie.clear()).body(body);
     }
 }

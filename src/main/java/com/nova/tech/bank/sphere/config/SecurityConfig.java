@@ -1,6 +1,8 @@
 package com.nova.tech.bank.sphere.config;
 
 import com.nova.tech.bank.sphere.security.JwtAuthFilter;
+import com.nova.tech.bank.sphere.security.OAuth2LoginFailureHandler;
+import com.nova.tech.bank.sphere.security.OAuth2LoginSuccessHandler;
 import com.nova.tech.bank.sphere.security.RestSecurityHandlers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +24,8 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final RestSecurityHandlers restHandlers;
+    private final OAuth2LoginSuccessHandler oauth2SuccessHandler;
+    private final OAuth2LoginFailureHandler oauth2FailureHandler;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -31,8 +35,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)  // stateless bearer-token API, no cookies for auth yet
-                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable)
+                // Sessions exist only during the few seconds of the Google handshake.
+                // Every API call is authenticated by the JWT filter alone.
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(restHandlers)
                         .accessDeniedHandler(restHandlers))
@@ -45,8 +51,12 @@ public class SecurityConfig {
                                 "/api/auth/reset-password",
                                 "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/verify-email").permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/auth/otp/**").hasAuthority("STAGE_PRE_AUTH")
                         .anyRequest().hasAuthority("STAGE_ACCESS"))
+                .oauth2Login(o -> o
+                        .successHandler(oauth2SuccessHandler)
+                        .failureHandler(oauth2FailureHandler))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

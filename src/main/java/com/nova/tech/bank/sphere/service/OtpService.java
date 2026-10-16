@@ -229,6 +229,21 @@ public class OtpService {
         return display;
     }
 
+    /** Verifies a fresh OTP for a sensitive action. Throws InvalidOtpException if it fails. */
+    @Transactional(noRollbackFor = {InvalidOtpException.class, AccountStateException.class})
+    public void confirmCode(Long userId, String code) {
+        User user = loadUsableUser(userId);
+        OtpSecret otp = loadEnabled(userId);
+
+        String secret = crypto.decrypt(otp.getSecretEncrypted(), aad(userId));
+        OptionalLong step = totpService.verify(secret, code, otp.getLastUsedStep());
+        if (step.isEmpty()) throw failOtp(user, otp, "wrong, expired or reused code (sensitive action)");
+
+        otp.setLastUsedStep(step.getAsLong());   // a code that approved this action cannot be used again
+        otp.setOtpFailures(0);
+        otpRepo.save(otp);
+    }
+
     private String hashBackup(Long userId, String raw) {
         return crypto.hmac("backup:" + userId + ":" + raw);
     }

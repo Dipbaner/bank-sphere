@@ -1,7 +1,9 @@
 package com.nova.tech.bank.sphere.controller;
 
 import com.nova.tech.bank.sphere.dto.*;
+import com.nova.tech.bank.sphere.exception.InvalidRefreshTokenException;
 import com.nova.tech.bank.sphere.security.AuthenticatedUser;
+import com.nova.tech.bank.sphere.security.RefreshCookie;
 import com.nova.tech.bank.sphere.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final RefreshCookie refreshCookie;
 
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest req) {
@@ -43,20 +46,38 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<AuthTokensResponse> refresh(@Valid @RequestBody RefreshRequest req) {
-        return ResponseEntity.ok(authService.refresh(req.getRefreshToken()));
+    public ResponseEntity<AuthTokensResponse> refresh(
+            @CookieValue(name = RefreshCookie.NAME, required = false) String cookieToken,
+            @RequestBody(required = false) RefreshRequest body) {
+
+        String raw = firstNonBlank(cookieToken, body == null ? null : body.getRefreshToken());
+        if (raw == null) throw new InvalidRefreshTokenException();
+
+        AuthTokensResponse r = authService.refresh(raw);
+        return ResponseEntity.ok().headers(refreshCookie.set(r.refreshToken()))
+                .body(refreshCookie.exposeInBody() ? r : r.withoutRefreshToken());
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<MessageResponse> logout(@AuthenticationPrincipal AuthenticatedUser me,
-                                                  @Valid @RequestBody(required = false) LogoutRequest req) {
-        authService.logout(me, req == null ? null : req.getRefreshToken());
-        return ResponseEntity.ok(new MessageResponse("Logged out"));
+    public ResponseEntity<MessageResponse> logout(
+            @AuthenticationPrincipal AuthenticatedUser me,
+            @CookieValue(name = RefreshCookie.NAME, required = false) String cookieToken,
+            @RequestBody(required = false) LogoutRequest body) {
+
+        authService.logout(me, firstNonBlank(cookieToken, body == null ? null : body.getRefreshToken()));
+        return ResponseEntity.ok().headers(refreshCookie.clear()).body(new MessageResponse("Logged out"));
     }
 
     @PostMapping("/logout-all")
     public ResponseEntity<MessageResponse> logoutAll(@AuthenticationPrincipal AuthenticatedUser me) {
         authService.logoutAll(me);
-        return ResponseEntity.ok(new MessageResponse("Logged out from all devices"));
+        return ResponseEntity.ok().headers(refreshCookie.clear())
+                .body(new MessageResponse("Logged out from all devices"));
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) return a;
+        if (b != null && !b.isBlank()) return b;
+        return null;
     }
 }
