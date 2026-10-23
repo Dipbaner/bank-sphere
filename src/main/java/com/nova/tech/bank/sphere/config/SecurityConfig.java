@@ -1,9 +1,6 @@
 package com.nova.tech.bank.sphere.config;
 
-import com.nova.tech.bank.sphere.security.JwtAuthFilter;
-import com.nova.tech.bank.sphere.security.OAuth2LoginFailureHandler;
-import com.nova.tech.bank.sphere.security.OAuth2LoginSuccessHandler;
-import com.nova.tech.bank.sphere.security.RestSecurityHandlers;
+import com.nova.tech.bank.sphere.security.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +13,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
 @Configuration
 @EnableMethodSecurity
@@ -23,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final RestSecurityHandlers restHandlers;
     private final OAuth2LoginSuccessHandler oauth2SuccessHandler;
     private final OAuth2LoginFailureHandler oauth2FailureHandler;
@@ -36,9 +35,11 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                // Sessions exist only during the few seconds of the Google handshake.
-                // Every API call is authenticated by the JWT filter alone.
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .headers(h -> h
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'none'; frame-ancestors 'none'"))
+                        .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                        .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(restHandlers)
                         .accessDeniedHandler(restHandlers))
@@ -57,6 +58,7 @@ public class SecurityConfig {
                 .oauth2Login(o -> o
                         .successHandler(oauth2SuccessHandler)
                         .failureHandler(oauth2FailureHandler))
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)   // first: refuse floods cheaply
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
