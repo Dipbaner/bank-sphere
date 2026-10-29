@@ -84,4 +84,9 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).headers(refreshCookie.clear()).body(body);
     }
+
+    @ExceptionHandler(TransactionException.class)
+    public ResponseEntity<Map<String, Object>> handleTransaction(TransactionException ex) {
+        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), null);
+    }
 }
