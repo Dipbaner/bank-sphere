@@ -27,7 +27,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             new Rule("reset",    "/api/auth/reset-password",      false, 10, Duration.ofMinutes(10)),
             new Rule("otp",      "/api/auth/otp/",                true,  15, Duration.ofMinutes(1)),
             new Rule("stepup",   "/api/auth/step-up",             false, 15, Duration.ofMinutes(1)),
-            new Rule("refresh",  "/api/auth/refresh",             false, 30, Duration.ofMinutes(1)));
+            new Rule("refresh",  "/api/auth/refresh",             false, 30, Duration.ofMinutes(1)),
+            new Rule("money",    "/api/accounts/",                true,  30, Duration.ofMinutes(1)));
 
     private final RateLimiter limiter;
     private final boolean enabled;
@@ -43,8 +44,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (enabled && "POST".equals(request.getMethod())) {
             Rule rule = match(request.getRequestURI());
             if (rule != null) {
-                // getRemoteAddr is the real connecting address. Never trust X-Forwarded-For
-                // unless the app sits behind a proxy that you control.
                 long wait = limiter.tryConsume(rule.name() + "|" + request.getRemoteAddr(),
                         rule.capacity(), rule.window());
                 if (wait > 0) {

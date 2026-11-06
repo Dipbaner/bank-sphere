@@ -2,17 +2,15 @@ package com.nova.tech.bank.sphere.exception;
 
 import com.nova.tech.bank.sphere.security.RefreshCookie;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.http.*;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.*;
-import java.time.LocalDateTime;
-import java.util.*;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -30,19 +28,14 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Invalid input", fields);
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleUnreadable(HttpMessageNotReadableException ex) {
+        return build(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST", "Request body is missing or malformed", null);
+    }
+
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicate(DuplicateResourceException ex) {
         return build(HttpStatus.CONFLICT, "DUPLICATE", ex.getMessage(), null);
-    }
-
-    private ResponseEntity<Map<String, Object>> build(HttpStatus s, String code, String msg, Object details) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", s.value());
-        body.put("code", code);
-        body.put("message", msg);
-        if (details != null) body.put("details", details);
-        return ResponseEntity.status(s).body(body);
     }
 
     @ExceptionHandler(InvalidTokenException.class)
@@ -70,11 +63,6 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), null);
     }
 
-    @ExceptionHandler(PasswordException.class)
-    public ResponseEntity<Map<String, Object>> handlePassword(PasswordException ex) {
-        return build(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), null);
-    }
-
     @ExceptionHandler(InvalidRefreshTokenException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidRefresh(InvalidRefreshTokenException ex) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -85,8 +73,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).headers(refreshCookie.clear()).body(body);
     }
 
+    @ExceptionHandler(PasswordException.class)
+    public ResponseEntity<Map<String, Object>> handlePassword(PasswordException ex) {
+        return build(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(StepUpRequiredException.class)
+    public ResponseEntity<Map<String, Object>> handleStepUp(StepUpRequiredException ex) {
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("action", ex.getAction().name());
+        details.put("context", ex.getContext());
+        return build(HttpStatus.FORBIDDEN, "STEP_UP_REQUIRED", ex.getMessage(), details);
+    }
+
     @ExceptionHandler(TransactionException.class)
     public ResponseEntity<Map<String, Object>> handleTransaction(TransactionException ex) {
         return build(ex.getStatus(), ex.getCode(), ex.getMessage(), null);
+    }
+
+    /** Two requests fought for one account row and one gave up waiting. Safe to retry. */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleLockFailure(PessimisticLockingFailureException ex) {
+        return build(HttpStatus.CONFLICT, "ACCOUNT_BUSY",
+                "The account is busy. Please try again with the same Idempotency-Key.", null);
+    }
+
+    private ResponseEntity<Map<String, Object>> build(HttpStatus status, String code, String message, Object details) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", status.value());
+        body.put("code", code);
+        body.put("message", message);
+        if (details != null) body.put("details", details);
+        return ResponseEntity.status(status).body(body);
     }
 }

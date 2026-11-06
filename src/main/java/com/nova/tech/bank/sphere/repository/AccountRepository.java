@@ -21,4 +21,10 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id in :ids order by a.id")
     List<Account> lockAllById(@Param("ids") Collection<Long> ids);
+
+    /** Locks the row AND proves ownership in one statement. Empty if the account is not the user's. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from Account a where a.accountNumber = :number and a.userId = :userId")
+    Optional<Account> lockByAccountNumberAndUserId(@Param("number") String accountNumber,
+                                                   @Param("userId") Long userId);
 }
