@@ -2,29 +2,27 @@ package com.nova.tech.bank.sphere.repository;
 
 import com.nova.tech.bank.sphere.entity.Account;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+@Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
 
-    Optional<Account> findByAccountNumber(String accountNumber);
+    /** SELECT ... FOR UPDATE. Ownership is part of the query: foreign and unknown accounts look the same. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000"))
+    @Query("select a from Account a where a.accountNumber = :no and a.userId = :userId")
+    Optional<Account> lockByAccountNumberAndUserId(@Param("no") String accountNumber,
+                                                   @Param("userId") Long userId);
 
     List<Account> findByUserIdOrderByIdAsc(Long userId);
-
-    /** Locks the rows (SELECT ... FOR UPDATE). Sorted by id, so every caller locks in the same order. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select a from Account a where a.id in :ids order by a.id")
-    List<Account> lockAllById(@Param("ids") Collection<Long> ids);
-
-    /** Locks the row AND proves ownership in one statement. Empty if the account is not the user's. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select a from Account a where a.accountNumber = :number and a.userId = :userId")
-    Optional<Account> lockByAccountNumberAndUserId(@Param("number") String accountNumber,
-                                                   @Param("userId") Long userId);
 }

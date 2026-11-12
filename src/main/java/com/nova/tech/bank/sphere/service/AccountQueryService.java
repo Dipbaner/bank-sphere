@@ -9,15 +9,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class AccountQueryService {
 
-    private final AccountRepository accountRepository;
+    private final AccountRepository accounts;
+
+    public AccountQueryService(AccountRepository accounts) {
+        this.accounts = accounts;
+    }
 
     @Transactional(readOnly = true)
-    public List<AccountResponse> myAccounts(Long userId) {
-        return accountRepository.findByUserIdOrderByIdAsc(userId).stream()
-                .map(AccountResponse::from)
+    public List<AccountResponse> listFor(Long userId) {
+        return accounts.findByUserIdOrderByIdAsc(userId).stream()
+                .map(a -> new AccountResponse(a.getAccountNumber(), a.getType().name(),
+                        a.getStatus().name(), a.getBalance(), a.getCreatedAt()))
                 .toList();
     }
 }

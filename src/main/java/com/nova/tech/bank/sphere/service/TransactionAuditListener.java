@@ -8,14 +8,19 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
-@RequiredArgsConstructor
 public class TransactionAuditListener {
 
     private final AuditService auditService;
 
+    public TransactionAuditListener(AuditService auditService) {
+        this.auditService = auditService;
+    }
+
+    /** Runs after commit, so the log never claims a rolled-back transaction. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCompleted(TransactionCompletedEvent e) {
-        auditService.log(e.userId(), e.email(), AuditAction.TRANSACTION_COMPLETED, AuditStatus.SUCCESS,
-                e.type() + " " + e.amount().toPlainString() + " " + e.referenceId());
+        // Details: action, amount, reference only. Never tokens or OTPs.
+        auditService.record(AuditAction.TRANSACTION_COMPLETED, e.userId(),
+                e.type() + " amount=" + e.amount().toPlainString() + " ref=" + e.referenceId());
     }
 }

@@ -4,5 +4,7 @@ import com.nova.tech.bank.sphere.entity.TransactionType;
 
 import java.math.BigDecimal;
 
-public record TransactionCompletedEvent(Long userId, String email, String referenceId,
-                                        TransactionType type, BigDecimal amount) {}
+/** Published inside the money transaction; handled only after it commits. */
+public record TransactionCompletedEvent(
+        Long userId, String referenceId, String type, BigDecimal amount, String accountNumber) {
+}

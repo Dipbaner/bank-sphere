@@ -18,6 +18,11 @@ public class TransactionException extends RuntimeException {
         this.status = status;
     }
 
+    public TransactionException(String requestInProgress, HttpStatus httpStatus, String s, String code, HttpStatus status) {
+        this.code = code;
+        this.status = status;
+    }
+
     public String getCode() { return code; }
     public HttpStatus getStatus() { return status; }
 }

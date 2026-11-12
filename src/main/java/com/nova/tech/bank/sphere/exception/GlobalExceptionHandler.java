@@ -86,10 +86,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "STEP_UP_REQUIRED", ex.getMessage(), details);
     }
 
-    @ExceptionHandler(TransactionException.class)
-    public ResponseEntity<Map<String, Object>> handleTransaction(TransactionException ex) {
-        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), null);
-    }
+
 
     /** Two requests fought for one account row and one gave up waiting. Safe to retry. */
     @ExceptionHandler(PessimisticLockingFailureException.class)
@@ -106,5 +103,17 @@ public class GlobalExceptionHandler {
         body.put("message", message);
         if (details != null) body.put("details", details);
         return ResponseEntity.status(status).body(body);
+    }
+
+    @ExceptionHandler(TransactionException.class)
+    public ResponseEntity<Map<String, Object>> handleTransaction(TransactionException e) {
+        return ResponseEntity.status(e.getStatus())
+                .body(Map.of("code", e.getCode(), "message", e.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleMalformed(Exception e) {
+        return ResponseEntity.badRequest()
+                .body(Map.of("code", "MALFORMED_REQUEST", "message", "Request body is missing or not valid JSON."));
     }
 }
